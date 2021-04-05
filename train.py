@@ -75,11 +75,11 @@ def train(encoder_1, encoder_2, encoder_3, model, iterator, optimizer, criterion
 max_input_length = 200
 
 # tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
-tokenizer = AutoTokenizer.from_pretrained("sentence-transformers/bert-base-nli-mean-tokens")
+tokenizer = AutoTokenizer.from_pretrained("bert_models/ce_roberta_base", local_files_only = True)
 
 def tokenize_and_cut(sentence):
-    tokens = tokenizer(sentence, padding=True, truncation=True, max_length=128, return_tensors='pt')
-    # tokens = tokens[:max_input_length - 2]
+    tokens = tokenizer.tokenize(sentence)
+    tokens = tokens[:max_input_length - 2]
     return tokens
 
 
@@ -140,7 +140,7 @@ fields = [
 
 # load the dataset in json format
 train_ds, valid_ds, test_ds = data.TabularDataset.splits(
-   path = 'data',
+   path = '../data',
    train = 'train.csv',
    validation = 'dev.csv',
    test = 'test.csv',
@@ -160,7 +160,7 @@ train_it, valid_it, test_it = data.BucketIterator.splits(
   (train_ds, valid_ds, test_ds),
   sort_key = lambda x: x.cited_title,
   sort = True,
-  batch_size = 32,
+  batch_size = 2,
   device = 'cpu'
 )
 
@@ -174,13 +174,13 @@ N_LAYERS = 2
 BIDIRECTIONAL = True
 DROPOUT = 0.25
 
-encoder_1 = model = AutoModel.from_pretrained("sentence-transformers/ce-roberta-base-quora")
+encoder_1 =  AutoModel.from_pretrained("bert_models/ce_roberta_base", local_files_only = True)
 
-encoder_2 = model = AutoModel.from_pretrained("sentence-transformers/ce-roberta-base-quora")
+encoder_2 =  AutoModel.from_pretrained("bert_models/ce_roberta_base", local_files_only = True)
 
-encoder_3 = model = AutoModel.from_pretrained("sentence-transformers/ce-roberta-base-quora")
+encoder_3 =  AutoModel.from_pretrained("bert_models/ce_roberta_base", local_files_only = True)
 
-model = Classifier(600, HIDDEN_DIM, OUTPUT_DIM, DROPOUT)
+model = Classifier(768 * 3, HIDDEN_DIM, OUTPUT_DIM, DROPOUT)
 
 
 import torch.optim as optim
@@ -202,14 +202,37 @@ def mean_pooling(model_output, attention_mask):
     sum_mask = torch.clamp(input_mask_expanded.sum(1), min=1e-9)
     return sum_embeddings / sum_mask
 
+epoch_loss = 0
+epoch_acc = 0
+
+model.train()
 for batch in train_it:
-        print('ok')
-        optimizer.zero_grad()
+    print('ok')
+    optimizer.zero_grad()
+    print(batch.citing_title.size())
+    in1 = encoder_1(batch.citing_title)[0][:,-1,:]
+    in2 = encoder_2(batch.cited_title)[0][:,-1,:]
+    in3 = encoder_3(batch.citation_context)[0][:,-1,:]
+    
+    
+    
+    print(torch.squeeze(in1, 0).size())
+    print(in1.size())
         
-        in1 = encoder_1(batch.citing_title)
-        e = mean_pooling(in1, batch.citing_title)
-        print(in1[0].size())
-        break
+        
+    predictions = model(in1, in2, in3, pad_token_idx).squeeze(1)
+        
+    loss = criterion(predictions, batch.citation_class_label)
+    
+    acc = binary_accuracy(predictions, batch.citation_class_label)
+    
+    loss.backward()
+    
+    optimizer.step()
+    
+    epoch_loss += loss.item()
+    epoch_acc += acc.item()
+    break
 
 x = train(encoder_1, encoder_2, encoder_3, model, train_it, optimizer, criterion)
         

@@ -8,6 +8,9 @@ Created on Wed Mar 31 09:29:20 2021
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
+
+
 
 
 class Classifier(nn.Module):
@@ -21,24 +24,40 @@ class Classifier(nn.Module):
         self.output_dim = output_dim
         
         
-        self.classifier_l1 = nn.Linear(600, hidden_dim)
-        self.classifier_l2 = nn.Linear(hidden_dim * input_dim, output_dim)
+        self.classifier_l1 = nn.Linear(input_dim, hidden_dim)
+        self.classifier_l2 = nn.Linear(hidden_dim , output_dim)
         
         
     
-    def forward(self, input1, input2, input3):
+    def forward(self, input1, input2, input3, pad_token):
         
+        # add_ = max(input1.size()[1], input2.size()[1], input3.size()[1])
+        # p1 = (0,0,0, add_-input1.size()[1])
+        # p2 = (0,0,0, add_-input2.size()[1])
+        # p3 = (0,0,0, add_-input3.size()[1])
         
-        input = torch.cat([input1.unsqueeze(0), input2.unsqueeze(0), input3.unsqueeze(0)], 2)
+        # input1 = F.pad(input1, p1, "constant", pad_token)
+        # input2 = F.pad(input2, p2, "constant", pad_token)  
+        # input3 = F.pad(input3, p3, "constant", pad_token)  
         
-        input = input.transpose(0,2)
+        print("heyyy11", input1.unsqueeze(0).size())
+        print("heyyy12", input2.unsqueeze(0).size())
+        print("heyyy13", input3.unsqueeze(0).size())
+        
+        input = torch.cat([input1.unsqueeze(0), input2.unsqueeze(0), input3.unsqueeze(0)], 2).squeeze()
+        
+
         
         print("heyyy", input.size())
         
         out = self.classifier_l1(input)
-        out = out.view(out.size()[1], out.size()[0] * out.size()[2])
+        
+        print(out.size(), "outttt")
+   
+        print(out.size(), "outttt")
         out = self.classifier_l2(out)
         
+        print(out.size())
         return out
 #        return input
         
